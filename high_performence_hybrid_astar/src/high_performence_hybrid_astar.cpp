@@ -4,11 +4,8 @@ void HybridAstar::initParam(const PlannerCommonParam &planner_common_param)
 {
     _planner_common_param = planner_common_param;
     _transition_table = createTransitionTable(
-        _planner_common_param.min_turning_radius,
-        _planner_common_param.max_turning_radius,
-        _planner_common_param.turning_radius_size,
-        _planner_common_param.theta_size,
-        _planner_common_param.use_back);
+        _planner_common_param.min_turning_radius, _planner_common_param.max_turning_radius,
+        _planner_common_param.turning_radius_size, _planner_common_param.theta_size, _planner_common_param.use_back);
 
     alpha = _planner_common_param.alpha;
     wObstacle = _planner_common_param.obstacle_weight;
@@ -19,10 +16,9 @@ void HybridAstar::initParam(const PlannerCommonParam &planner_common_param)
 std::vector<std::vector<NodeUpdate>> HybridAstar::createTransitionTable(const double minimum_turning_radius,
                                                                         const double maximum_turning_radius,
                                                                         const int turning_radius_size,
-                                                                        const int theta_size,
-                                                                        const bool use_back)
+                                                                        const int theta_size, const bool use_back)
 {
-    //遍历每一个角度
+    // 遍历每一个角度
     std::vector<std::vector<NodeUpdate>> transition_table;
     transition_table.resize(theta_size);
 
@@ -32,27 +28,27 @@ std::vector<std::vector<NodeUpdate>> HybridAstar::createTransitionTable(const do
     const auto &R_min = minimum_turning_radius;
     const auto &R_max = maximum_turning_radius;
 
-    //每一步更新的最小移动距离，赋给走直线的情况
+    // 每一步更新的最小移动距离，赋给走直线的情况
     const double step_min = R_min * dtheta;
     // double step_min = std::sqrt(2) * _cost_map.info.resolution; //单次步长一定会走出一个格子
     // step_min = (R_min * dtheta) < step_min ? R_min * dtheta : step_min;
 
-    const double dR = (R_max - R_min) / static_cast<double>((turning_radius_size==0 ? 1:turning_radius_size));
+    const double dR = (R_max - R_min) / static_cast<double>((turning_radius_size == 0 ? 1 : turning_radius_size));
 
     std::vector<NodeUpdate> forward_node_candidates;
 
-    //走直线的情况
+    // 走直线的情况
     const NodeUpdate forward_straight{step_min, 0.0, 0.0, step_min, false, false};
     forward_node_candidates.push_back(forward_straight);
 
-    //计算从最小转弯半径到最大转弯半径下的位置偏移（单位角度下）
+    // 计算从最小转弯半径到最大转弯半径下的位置偏移（单位角度下）
     for (int i = 0; i < static_cast<int>(turning_radius_size + 1); ++i)
     {
-        double R = R_min + i * dR; // R从最小增加到最大
+        double R = R_min + i * dR;  // R从最小增加到最大
 
-        double step = R * dtheta;  //单次路径长度为曲线的弧长（也就是gcost）
-        //和最短步长比较
-        // double step = (R * dtheta) > step_min ? R * dtheta : step_min;
+        double step = R * dtheta;  // 单次路径长度为曲线的弧长（也就是gcost）
+        // 和最短步长比较
+        //  double step = (R * dtheta) > step_min ? R * dtheta : step_min;
 
         NodeUpdate forward_left{R * sin(dtheta), R * (1 - cos(dtheta)), dtheta, step, false, true};
         NodeUpdate forward_right = forward_left.flipped();
@@ -60,14 +56,14 @@ std::vector<std::vector<NodeUpdate>> HybridAstar::createTransitionTable(const do
         forward_node_candidates.push_back(forward_right);
     }
 
-    //遍历整个角度空间，dtheta为单位角度
+    // 遍历整个角度空间，dtheta为单位角度
     for (int i = 0; i < theta_size; i++)
     {
         const double theta = dtheta * static_cast<double>(i);
 
         for (const auto &nu : forward_node_candidates)
         {
-            //插入在当前角度下的候选点（从最小转弯半径到最大转弯半径）
+            // 插入在当前角度下的候选点（从最小转弯半径到最大转弯半径）
             transition_table[i].push_back(nu.rotated(theta));
         }
 
@@ -85,7 +81,6 @@ std::vector<std::vector<NodeUpdate>> HybridAstar::createTransitionTable(const do
 
 SearchStatus HybridAstar::makePlan(const geometry_msgs::Pose &start_pose, const geometry_msgs::Pose &goal_pose)
 {
-
     _start_pose = global2local(_cost_map, start_pose);
     _goal_pose = global2local(_cost_map, goal_pose);
 
@@ -112,26 +107,26 @@ SearchStatus HybridAstar::search()
 
     ROS_INFO("----------start search----------");
 
-    //碰撞节点可视化id
+    // 碰撞节点可视化id
     int vis_collision_coount = 0;
 
     while (!_open_list.empty())
     {
-        //当前时间减去初始时间
+        // 当前时间减去初始时间
         const double msec = t0.getTimerMilliSec();
-        //超时
+        // 超时
         if (msec > _planner_common_param.time_limit)
         {
             return SearchStatus::FAILURE_TIMEOUT_EXCEEDED;
         }
 
-        //选择代价值最小的节点作为扩张节点
+        // 选择代价值最小的节点作为扩张节点
         AstarNodePtr current_node = _open_list.top();
 
-        //也放入记忆set，用于最后的reset（以防万一,估计就是起点和终点）
+        // 也放入记忆set，用于最后的reset（以防万一,估计就是起点和终点）
         _memory_open_nodes.insert(current_node);
 
-        //判断是否已经为Close（比如倒车的情况）
+        // 判断是否已经为Close（比如倒车的情况）
         if (current_node->status == NodeStatus::Close)
         {
             // ROS_INFO("current_node has closed");
@@ -142,7 +137,7 @@ SearchStatus HybridAstar::search()
         _open_list.pop();
         current_node->status = NodeStatus::Close;
 
-        //尝试解析扩张
+        // 尝试解析扩张
         if (_planner_common_param.use_analytic_expansion)
         {
             AstarNodePtr goal_node = std::make_shared<AstarNode>();
@@ -153,7 +148,8 @@ SearchStatus HybridAstar::search()
             int analytic_iterations = 0;
             float closest_distance = std::numeric_limits<float>::max();
 
-            AstarNodePtr analytic_node = tryAnalyticExpansion(current_node, goal_node, analytic_iterations, closest_distance);
+            AstarNodePtr analytic_node =
+                tryAnalyticExpansion(current_node, goal_node, analytic_iterations, closest_distance);
             if (analytic_node != nullptr)
             {
                 ROS_INFO("analytic expansion successfully");
@@ -162,7 +158,7 @@ SearchStatus HybridAstar::search()
             }
         }
 
-        //如果当前节点就是终点，那么记录路径并返回SUCCESS
+        // 如果当前节点就是终点，那么记录路径并返回SUCCESS
         if (isGoal(*current_node))
         {
             setPath(current_node);
@@ -170,7 +166,7 @@ SearchStatus HybridAstar::search()
             return SearchStatus::SUCCESS;
         }
 
-        //开始扩张
+        // 开始扩张
         const auto index_theta = getThetaIndex(current_node->theta, _planner_common_param.theta_size);
         for (const auto &transition : _transition_table[index_theta])
         {
@@ -180,19 +176,19 @@ SearchStatus HybridAstar::search()
             // g值，即真实路径代价值
             double move_cost = 0.0;
             double back_cost = 0.0;
-            //如果是反向的话，需要乘上反向惩罚权重
+            // 如果是反向的话，需要乘上反向惩罚权重
             back_cost = is_back_point ? _planner_common_param.reverse_weight * transition.step : transition.step;
-            //如果有转弯，需要乘上转弯惩罚权重
+            // 如果有转弯，需要乘上转弯惩罚权重
             move_cost = is_turning_point ? _planner_common_param.turning_weight * back_cost : back_cost;
 
-            //计算下一个状态的索引
+            // 计算下一个状态的索引
             geometry_msgs::Pose next_pose;
             next_pose.position.x = current_node->x + transition.shift_x;
             next_pose.position.y = current_node->y + transition.shift_y;
             next_pose.orientation = getQuaternion(current_node->theta + transition.shift_theta);
             const auto next_index = pose2index(next_pose, _cost_map.info.resolution, _planner_common_param.theta_size);
 
-            //如果扩张的这个点有碰撞，跳过该点
+            // 如果扩张的这个点有碰撞，跳过该点
             if (detectCollision(next_index))
             {
                 continue;
@@ -227,22 +223,21 @@ SearchStatus HybridAstar::search()
         }
     }
 
-    //没找到路径
+    // 没找到路径
     return SearchStatus::FAILURE_NO_PATH_FOUND;
 }
 
 bool HybridAstar::setStartNode()
 {
-
     const auto start_index = pose2index(_start_pose, _cost_map.info.resolution, _planner_common_param.theta_size);
 
-    //检测初始节点是否有碰撞
+    // 检测初始节点是否有碰撞
     if (detectCollision(start_index))
     {
         return false;
     }
 
-    //设置A*初始节点
+    // 设置A*初始节点
     AstarNodePtr start_node = getNodeRef(start_index);
     start_node->x = _start_pose.position.x;
     start_node->y = _start_pose.position.y;
@@ -254,7 +249,7 @@ bool HybridAstar::setStartNode()
     start_node->status = NodeStatus::Open;
     start_node->parent = nullptr;
 
-    //将初始节点推入openlist
+    // 将初始节点推入openlist
     _open_list.push(start_node);
 
     return true;
@@ -285,7 +280,7 @@ void HybridAstar::setPath(AstarNodePtr goal_node)
     _final_traj.header = header;
     _final_traj.trajectory.clear();
 
-    //从目标点反向迭代回起点
+    // 从目标点反向迭代回起点
     AstarNodePtr node = goal_node;
 
     double path_length = 0.0;
@@ -300,21 +295,21 @@ void HybridAstar::setPath(AstarNodePtr goal_node)
         single_waypoint.is_back = node->is_back;
         _final_traj.trajectory.push_back(single_waypoint);
 
-        //计算路径长度
+        // 计算路径长度
         if (node->parent != nullptr)
         {
             path_length += std::hypot(node->x - node->parent->x, node->y - node->parent->y);
         }
 
-        //迭代至下一个点
+        // 迭代至下一个点
         node = node->parent;
     }
     ROS_INFO("path_length:%f", path_length);
 
-    //反转路径，才是从起点到终点的路径
+    // 反转路径，才是从起点到终点的路径
     std::reverse(_final_traj.trajectory.begin(), _final_traj.trajectory.end());
 
-    //更新第一个点的朝向
+    // 更新第一个点的朝向
     if (_final_traj.trajectory.size() > 1)
     {
         _final_traj.trajectory.at(0).is_back = _final_traj.trajectory.at(1).is_back;
@@ -362,7 +357,7 @@ double HybridAstar::getDistanceHeuristic(const geometry_msgs::Pose &start, const
 double HybridAstar::getObstacleHeuristic(const geometry_msgs::Pose &start, const geometry_msgs::Pose &goal)
 {
     // ROS_INFO("start 2d A*");
-    //反向2d A*(注意2d A*的起点是真实的终点，反向搜索到当前的起点)
+    // 反向2d A*(注意2d A*的起点是真实的终点，反向搜索到当前的起点)
     AstarNode2dPtr goal_2d = std::make_shared<AstarNode2d>();
     goal_2d->x_index = pose2index(start, _cost_map.info.resolution, 1).x_index;
     goal_2d->y_index = pose2index(start, _cost_map.info.resolution, 1).y_index;
@@ -371,9 +366,10 @@ double HybridAstar::getObstacleHeuristic(const geometry_msgs::Pose &start, const
     start_2d->x_index = pose2index(goal, _cost_map.info.resolution, 1).x_index;
     start_2d->y_index = pose2index(goal, _cost_map.info.resolution, 1).y_index;
     start_2d->status = NodeStatus::Open;
-    start_2d->h_cost = sqrt(pow(start_2d->x_index - goal_2d->x_index, 2.0) + pow(start_2d->y_index - goal_2d->y_index, 2.0));
+    start_2d->h_cost =
+        sqrt(pow(start_2d->x_index - goal_2d->x_index, 2.0) + pow(start_2d->y_index - goal_2d->y_index, 2.0));
 
-    //如果该点没有被搜索过，初始化并重新开始搜索(反向2d A*的终点，就是要启发值要判断的起点)
+    // 如果该点没有被搜索过，初始化并重新开始搜索(反向2d A*的终点，就是要启发值要判断的起点)
     if (_2d_nodes[goal_2d->x_index][goal_2d->y_index]->is_discovered == true)
     {
         return _2d_nodes[goal_2d->x_index][goal_2d->y_index]->g_cost;
@@ -396,32 +392,32 @@ double HybridAstar::getObstacleHeuristic(const geometry_msgs::Pose &start, const
         std::swap(_2d_memory_open_nodes, empty_set);
     }
 
-    //不用检查开始节点（即真实终点）的碰撞，因为hybrid A*已经做过了，2d A*只是用来计算启发值的
+    // 不用检查开始节点（即真实终点）的碰撞，因为hybrid A*已经做过了，2d A*只是用来计算启发值的
 
     _2d_open_list.push(start_2d);
 
     std::unordered_map<int, bool> dir_map;
     if (_planner_common_param.use_theta_cost)
     {
-        if (goal_2d->x_index > start_2d->x_index && goal_2d->y_index > start_2d->y_index) //右上
+        if (goal_2d->x_index > start_2d->x_index && goal_2d->y_index > start_2d->y_index)  // 右上
         {
             dir_map.insert(std::pair<int, bool>(0, true));
             dir_map.insert(std::pair<int, bool>(1, true));
             dir_map.insert(std::pair<int, bool>(2, true));
         }
-        else if (goal_2d->x_index > start_2d->x_index && goal_2d->y_index < start_2d->y_index) //右下
+        else if (goal_2d->x_index > start_2d->x_index && goal_2d->y_index < start_2d->y_index)  // 右下
         {
             dir_map.insert(std::pair<int, bool>(2, true));
             dir_map.insert(std::pair<int, bool>(3, true));
             dir_map.insert(std::pair<int, bool>(4, true));
         }
-        else if (goal_2d->x_index < start_2d->x_index && goal_2d->y_index > start_2d->y_index) //左下
+        else if (goal_2d->x_index < start_2d->x_index && goal_2d->y_index > start_2d->y_index)  // 左下
         {
             dir_map.insert(std::pair<int, bool>(4, true));
             dir_map.insert(std::pair<int, bool>(5, true));
             dir_map.insert(std::pair<int, bool>(6, true));
         }
-        else if (goal_2d->x_index < start_2d->x_index && goal_2d->y_index < start_2d->y_index) //左上
+        else if (goal_2d->x_index < start_2d->x_index && goal_2d->y_index < start_2d->y_index)  // 左上
         {
             dir_map.insert(std::pair<int, bool>(6, true));
             dir_map.insert(std::pair<int, bool>(7, true));
@@ -445,8 +441,7 @@ double HybridAstar::getObstacleHeuristic(const geometry_msgs::Pose &start, const
 
         _2d_memory_open_nodes.insert(current_node_2d);
 
-        if (current_node_2d->x_index == goal_2d->x_index &&
-            current_node_2d->y_index == goal_2d->y_index)
+        if (current_node_2d->x_index == goal_2d->x_index && current_node_2d->y_index == goal_2d->y_index)
         {
             // ROS_INFO("find 2d A* goal:%d,%d", goal_2d->x_index, goal_2d->y_index);
             // AstarNode2dPtr node = current_node_2d;
@@ -458,13 +453,12 @@ double HybridAstar::getObstacleHeuristic(const geometry_msgs::Pose &start, const
             return current_node_2d->g_cost;
         }
 
-        //从上开始顺时针转
+        // 从上开始顺时针转
         int dx[8] = {0, 1, 1, 1, 0, -1, -1, -1};
         int dy[8] = {1, 1, 0, -1, -1, -1, 0, 1};
 
         for (int i = 0; i < 8; i++)
         {
-
             int nx = current_node_2d->x_index + dx[i];
             int ny = current_node_2d->y_index + dy[i];
             IndexXYT n_index(nx, ny, 1);
@@ -479,7 +473,7 @@ double HybridAstar::getObstacleHeuristic(const geometry_msgs::Pose &start, const
             double move_cost = sqrt(pow(dx[i], 2.0) + pow(dy[i], 2.0));
             if (_planner_common_param.use_theta_cost)
             {
-                if (dir_map.find(i) == dir_map.end()) //没找到
+                if (dir_map.find(i) == dir_map.end())  // 没找到
                 {
                     move_cost *= _planner_common_param.obstacle_theta_ratio;
                 }
@@ -532,12 +526,13 @@ void HybridAstar::SetOccupancyGrid(const nav_msgs::OccupancyGrid &cost_map)
 {
     _cost_map = cost_map;
 
-    // ROS_INFO("costmap height:%d,width:%d,resolution:%f", _cost_map.info.height, _cost_map.info.width, _cost_map.info.resolution);
+    // ROS_INFO("costmap height:%d,width:%d,resolution:%f", _cost_map.info.height, _cost_map.info.width,
+    // _cost_map.info.resolution);
 
     const auto map_height = _cost_map.info.height;
     const auto map_width = _cost_map.info.width;
 
-    //读取costmap中每个格点的障碍物信息，生成障碍物表
+    // 读取costmap中每个格点的障碍物信息，生成障碍物表
     _is_obstacle_table.clear();
     _is_obstacle_table.resize(map_height);
     for (int i = 0; i < map_height; i++)
@@ -556,7 +551,7 @@ void HybridAstar::SetOccupancyGrid(const nav_msgs::OccupancyGrid &cost_map)
 
     if (_planner_common_param.use_smoother)
     {
-        //生成维诺图，用于之后的轨迹平滑
+        // 生成维诺图，用于之后的轨迹平滑
         bool **bin_map = new bool *[map_height];
         for (int x = 0; x < map_width; x++)
         {
@@ -570,7 +565,7 @@ void HybridAstar::SetOccupancyGrid(const nav_msgs::OccupancyGrid &cost_map)
         _dynamic_voronoi.update();
     }
 
-    //为每一个搜索角度设置一个车体碰撞索引数组
+    // 为每一个搜索角度设置一个车体碰撞索引数组
     _collision_index_table.clear();
     for (int theta_index = 0; theta_index < _planner_common_param.theta_size; theta_index++)
     {
@@ -579,7 +574,7 @@ void HybridAstar::SetOccupancyGrid(const nav_msgs::OccupancyGrid &cost_map)
         _collision_index_table.push_back(index_2d);
     }
 
-    //初始化A*节点表(2d和3d)
+    // 初始化A*节点表(2d和3d)
     _nodes.clear();
     _nodes.resize(map_height);
 
@@ -616,30 +611,30 @@ void HybridAstar::SetOccupancyGrid(const nav_msgs::OccupancyGrid &cost_map)
     // ROS_INFO("SetOccupancyGrid successfully");
 }
 
-//计算车辆模型的碰撞区间，就是将指定旋转角下的车体映射格点索引保存下来，以备之后用来检测碰撞
+// 计算车辆模型的碰撞区间，就是将指定旋转角下的车体映射格点索引保存下来，以备之后用来检测碰撞
 void HybridAstar::computeCollisionIndexes(const int theta_index, std::vector<IndexXY> &index_2d)
 {
     const auto vehicle_shape = _planner_common_param.vehiche_shape;
 
-    //将车体定义为一个矩形，以重心为原点，右手坐标系，front为x轴正方向，left为y轴正方向
+    // 将车体定义为一个矩形，以重心为原点，右手坐标系，front为x轴正方向，left为y轴正方向
     const double back = -1.0 * vehicle_shape.cg2back;
     const double front = vehicle_shape.length - vehicle_shape.cg2back;
     const double right = -1.0 * vehicle_shape.width / 2;
     const double left = vehicle_shape.width / 2;
 
-    //得到坐标系原点（0，0），和指定旋转角theta
+    // 得到坐标系原点（0，0），和指定旋转角theta
     const auto base_pose = index2pose({0, 0, theta_index}, _cost_map.info.resolution, _planner_common_param.theta_size);
     const double base_theta = tf2::getYaw(base_pose.orientation);
 
     const float _cost_mapresolution = static_cast<double>(_cost_map.info.resolution);
 
-    //用一个一维数组保存车体大小范围内的格点索引
+    // 用一个一维数组保存车体大小范围内的格点索引
     for (double x = back; x <= front; x += _cost_mapresolution)
     {
         for (double y = right; y <= left; y += _cost_mapresolution)
         {
-            //直角坐标系下逆时针的旋转公式
-            //计算不同转向角下的车体坐标（如果base_theta为0，也就不变）
+            // 直角坐标系下逆时针的旋转公式
+            // 计算不同转向角下的车体坐标（如果base_theta为0，也就不变）
             const double offset_x = x * std::cos(base_theta) - y * std::sin(base_theta);
             const double offset_y = x * std::sin(base_theta) + y * std::cos(base_theta);
 
@@ -647,7 +642,8 @@ void HybridAstar::computeCollisionIndexes(const int theta_index, std::vector<Ind
             traverse_car_pose.position.x = base_pose.position.x + offset_x;
             traverse_car_pose.position.y = base_pose.position.y + offset_y;
 
-            const IndexXYT traverse_car_index_xyt = pose2index(traverse_car_pose, _cost_map.info.resolution, _planner_common_param.theta_size);
+            const IndexXYT traverse_car_index_xyt =
+                pose2index(traverse_car_pose, _cost_map.info.resolution, _planner_common_param.theta_size);
             IndexXY index_xy(traverse_car_index_xyt.x_index, traverse_car_index_xyt.y_index);
             index_2d.push_back(index_xy);
         }
@@ -656,14 +652,14 @@ void HybridAstar::computeCollisionIndexes(const int theta_index, std::vector<Ind
 
 bool HybridAstar::detectCollision(const IndexXYT &base_index) const
 {
-    //获取当前搜索角度下的车辆碰撞索引数组
+    // 获取当前搜索角度下的车辆碰撞索引数组
     const auto &coll_indexes_2d = _collision_index_table[base_index.theta_index];
     for (const auto &coll_index_2d : coll_indexes_2d)
     {
         // theta对碰撞检测没有影响，所以无所谓取多少
         IndexXYT coll_index{coll_index_2d.x_index, coll_index_2d.y_index, 0};
 
-        //当前点的位置，加上车体大小映射点
+        // 当前点的位置，加上车体大小映射点
         coll_index.x_index += base_index.x_index;
         coll_index.y_index += base_index.y_index;
 
@@ -760,7 +756,7 @@ inline bool HybridAstar::isOutOfRange(const IndexXYT &index) const
 
 inline bool HybridAstar::isObstacle(const IndexXYT &index) const
 {
-    //在调用这个函数之前，已经进行过边界检查了，所以不用担心越界
+    // 在调用这个函数之前，已经进行过边界检查了，所以不用担心越界
     return _is_obstacle_table[index.y_index][index.x_index];
 }
 
@@ -772,10 +768,9 @@ double HybridAstar::normalizeRadian(const double rad, const double min_rad)
 
 int HybridAstar::getThetaIndex(const double theta, const int theta_size)
 {
-    //当前角度除以单位角，再对离散角的总个数取余，就可以获得当前角在2π下的索引
+    // 当前角度除以单位角，再对离散角的总个数取余，就可以获得当前角在2π下的索引
     const double angle_increment_rad = 2.0 * M_PI / static_cast<double>(theta_size);
-    return static_cast<int>(normalizeRadian(theta, 0.0) / angle_increment_rad) %
-           static_cast<int>(theta_size);
+    return static_cast<int>(normalizeRadian(theta, 0.0) / angle_increment_rad) % static_cast<int>(theta_size);
 }
 
 geometry_msgs::TransformStamped HybridAstar::getTransform(const string &from, const string &to)
@@ -793,7 +788,8 @@ geometry_msgs::TransformStamped HybridAstar::getTransform(const string &from, co
     return tf;
 }
 
-geometry_msgs::Pose HybridAstar::transformPose(const geometry_msgs::Pose &pose, const geometry_msgs::TransformStamped &transform)
+geometry_msgs::Pose HybridAstar::transformPose(const geometry_msgs::Pose &pose,
+                                               const geometry_msgs::TransformStamped &transform)
 {
     geometry_msgs::PoseStamped transformed_pose;
 
@@ -806,7 +802,8 @@ geometry_msgs::Pose HybridAstar::transformPose(const geometry_msgs::Pose &pose, 
     return transformed_pose.pose;
 }
 
-geometry_msgs::Pose HybridAstar::global2local(const nav_msgs::OccupancyGrid &costmap, const geometry_msgs::Pose &pose_global)
+geometry_msgs::Pose HybridAstar::global2local(const nav_msgs::OccupancyGrid &costmap,
+                                              const geometry_msgs::Pose &pose_global)
 {
     tf2::Transform tf_origin;
     tf2::convert(costmap.info.origin, tf_origin);
@@ -817,7 +814,8 @@ geometry_msgs::Pose HybridAstar::global2local(const nav_msgs::OccupancyGrid &cos
     return transformPose(pose_global, transform);
 }
 
-geometry_msgs::Pose HybridAstar::local2global(const nav_msgs::OccupancyGrid &costmap, const geometry_msgs::Pose &pose_local)
+geometry_msgs::Pose HybridAstar::local2global(const nav_msgs::OccupancyGrid &costmap,
+                                              const geometry_msgs::Pose &pose_local)
 {
     tf2::Transform tf_origin;
     tf2::convert(costmap.info.origin, tf_origin);
@@ -828,7 +826,8 @@ geometry_msgs::Pose HybridAstar::local2global(const nav_msgs::OccupancyGrid &cos
     return transformPose(pose_local, transform);
 }
 
-IndexXYT HybridAstar::pose2index(const geometry_msgs::Pose &pose_local, const float &_cost_mapresolution, const int theta_size)
+IndexXYT HybridAstar::pose2index(const geometry_msgs::Pose &pose_local, const float &_cost_mapresolution,
+                                 const int theta_size)
 {
     const auto resolution = static_cast<double>(_cost_mapresolution);
     const int index_x = static_cast<int>(std::floor(pose_local.position.x / resolution));
@@ -837,11 +836,12 @@ IndexXYT HybridAstar::pose2index(const geometry_msgs::Pose &pose_local, const fl
     return {index_x, index_y, index_theta};
 }
 
-geometry_msgs::Pose HybridAstar::index2pose(const IndexXYT &index, const float &_cost_mapresolution, const int theta_size)
+geometry_msgs::Pose HybridAstar::index2pose(const IndexXYT &index, const float &_cost_mapresolution,
+                                            const int theta_size)
 {
     geometry_msgs::Pose pose_local;
 
-    //如果当前位置为（1，1），分辨率为1，那么index等于1。如果分辨率为0.2，那么index等于5。分辨率越小，index越大。
+    // 如果当前位置为（1，1），分辨率为1，那么index等于1。如果分辨率为0.2，那么index等于5。分辨率越小，index越大。
     pose_local.position.x = static_cast<float>(index.x_index + 0.5) * _cost_mapresolution;
     pose_local.position.y = static_cast<float>(index.y_index + 0.5) * _cost_mapresolution;
 
@@ -871,7 +871,7 @@ inline geometry_msgs::Quaternion HybridAstar::getQuaternion(const double yaw)
     return tf2::toMsg(q);
 }
 
-//计算pose在base_pose参考系下的坐标
+// 计算pose在base_pose参考系下的坐标
 geometry_msgs::Pose HybridAstar::calcRelativePose(const geometry_msgs::Pose &base_pose, const geometry_msgs::Pose &pose)
 {
     tf2::Transform tf_transform;
@@ -902,14 +902,14 @@ bool HybridAstar::isGoal(const AstarNode &node)
 {
     const auto relative_pose = calcRelativePose(_goal_pose, AstarNode2Pose(node));
 
-    //大于横向和纵向容忍值
+    // 大于横向和纵向容忍值
     if (std::fabs(relative_pose.position.x) > _planner_common_param.goal_longitudinal_tolerance ||
         std::fabs(relative_pose.position.y) > _planner_common_param.goal_lateral_tolerance)
     {
         return false;
     }
 
-    //大于角度容忍值
+    // 大于角度容忍值
     const auto angle_diff = normalizeRadian(tf2::getYaw(relative_pose.orientation));
     if (std::abs(angle_diff) > _planner_common_param.goal_angular_tolerance)
     {
@@ -921,8 +921,7 @@ bool HybridAstar::isGoal(const AstarNode &node)
 
 AstarNodePtr HybridAstar::getNodeRef(const IndexXYT &index)
 {
-    return _nodes[index.y_index][index.x_index]
-                 [index.theta_index];
+    return _nodes[index.y_index][index.x_index][index.theta_index];
 }
 
 void HybridAstar::reset()
@@ -930,25 +929,25 @@ void HybridAstar::reset()
     std::priority_queue<AstarNodePtr, std::vector<AstarNodePtr>, NodeComparison> empty_list;
     std::swap(_open_list, empty_list);
 
-    //初始化A*节点表
-    //遍历所有点
-    // for (int i = 0; i < _cost_map.info.height; i++)
-    // {
-    //     for (int j = 0; j < _cost_map.info.width; j++)
-    //     {
-    //         for (int t = 0; t < _planner_common_param.theta_size; t++)
-    //         {
-    //             if (_nodes[i][j][t]->status != NodeStatus::None)
-    //             {
-    //                 _nodes[i][j][t]->g_cost = 0.0;
-    //                 _nodes[i][j][t]->status = NodeStatus::None;
-    //                 _nodes[i][j][t]->h_cost = 0.0;
-    //             }
-    //         }
-    //     }
-    // }
+    // 初始化A*节点表
+    // 遍历所有点
+    //  for (int i = 0; i < _cost_map.info.height; i++)
+    //  {
+    //      for (int j = 0; j < _cost_map.info.width; j++)
+    //      {
+    //          for (int t = 0; t < _planner_common_param.theta_size; t++)
+    //          {
+    //              if (_nodes[i][j][t]->status != NodeStatus::None)
+    //              {
+    //                  _nodes[i][j][t]->g_cost = 0.0;
+    //                  _nodes[i][j][t]->status = NodeStatus::None;
+    //                  _nodes[i][j][t]->h_cost = 0.0;
+    //              }
+    //          }
+    //      }
+    //  }
 
-    //遍历这次OPEN或者CLOSE过的点
+    // 遍历这次OPEN或者CLOSE过的点
     for (auto it : _memory_open_nodes)
     {
         it->g_cost = 0.0;
@@ -959,7 +958,7 @@ void HybridAstar::reset()
     std::swap(_memory_open_nodes, empty_set);
 }
 
-//判断前后共5个点是否有方向不一致的问题，即判断一段距离方向是否改变
+// 判断前后共5个点是否有方向不一致的问题，即判断一段距离方向是否改变
 inline bool isCusp(std::vector<SingleWaypoint> &traj, int index)
 {
     bool dir_before_2 = traj[index - 2].is_back ? true : false;
@@ -968,7 +967,8 @@ inline bool isCusp(std::vector<SingleWaypoint> &traj, int index)
     bool dir_after_1 = traj[index + 1].is_back ? true : false;
     bool dir_after_2 = traj[index + 2].is_back ? true : false;
 
-    if (dir_before_2 != dir_before_1 || dir_before_1 != dir_current || dir_current != dir_after_1 || dir_after_1 != dir_after_2)
+    if (dir_before_2 != dir_before_1 || dir_before_1 != dir_current || dir_current != dir_after_1 ||
+        dir_after_1 != dir_after_2)
     {
         return true;
     }
@@ -980,11 +980,10 @@ inline bool isCusp(std::vector<SingleWaypoint> &traj, int index)
 
 void HybridAstar::smoothPath(TrajectoryWaypoints &initial_traj)
 {
-
     const int voronoi_width = _dynamic_voronoi.getSizeX();
     const int voronoi_height = _dynamic_voronoi.getSizeY();
 
-    //最大迭代次数
+    // 最大迭代次数
     const int max_interations = 500;
     int iteration = 0;
 
@@ -992,7 +991,7 @@ void HybridAstar::smoothPath(TrajectoryWaypoints &initial_traj)
 
     std::vector<SingleWaypoint> smooth_traj = initial_traj.trajectory;
 
-    float total_weight = wSmoothness + wCurvature + wObstacle; //四项的权重数
+    float total_weight = wSmoothness + wCurvature + wObstacle;  // 四项的权重数
     while (iteration < max_interations)
     {
         for (int i = 2; i < path_length - 2; i++)
@@ -1002,20 +1001,15 @@ void HybridAstar::smoothPath(TrajectoryWaypoints &initial_traj)
                 continue;
             }
 
-            Vector2D wp_before_2(smooth_traj[i - 2].pose.pose.position.x,
-                                 smooth_traj[i - 2].pose.pose.position.y);
+            Vector2D wp_before_2(smooth_traj[i - 2].pose.pose.position.x, smooth_traj[i - 2].pose.pose.position.y);
 
-            Vector2D wp_before_1(smooth_traj[i - 1].pose.pose.position.x,
-                                 smooth_traj[i - 1].pose.pose.position.y);
+            Vector2D wp_before_1(smooth_traj[i - 1].pose.pose.position.x, smooth_traj[i - 1].pose.pose.position.y);
 
-            Vector2D wp_current(smooth_traj[i].pose.pose.position.x,
-                                smooth_traj[i].pose.pose.position.y);
+            Vector2D wp_current(smooth_traj[i].pose.pose.position.x, smooth_traj[i].pose.pose.position.y);
 
-            Vector2D wp_after_1(smooth_traj[i + 1].pose.pose.position.x,
-                                smooth_traj[i + 1].pose.pose.position.y);
+            Vector2D wp_after_1(smooth_traj[i + 1].pose.pose.position.x, smooth_traj[i + 1].pose.pose.position.y);
 
-            Vector2D wp_after_2(smooth_traj[i + 2].pose.pose.position.x,
-                                smooth_traj[i + 2].pose.pose.position.y);
+            Vector2D wp_after_2(smooth_traj[i + 2].pose.pose.position.x, smooth_traj[i + 2].pose.pose.position.y);
 
             Vector2D correction;
             geometry_msgs::Pose temp_correction;
@@ -1023,13 +1017,12 @@ void HybridAstar::smoothPath(TrajectoryWaypoints &initial_traj)
             /*----------障碍物项----------*/
             correction = correction - obstacleTerm(wp_current);
 
-            //边界判断
+            // 边界判断
             {
                 temp_correction.position.x = correction.getX();
                 temp_correction.position.y = correction.getY();
-                const IndexXYT index_correction = pose2index(temp_correction,
-                                                             _cost_map.info.resolution,
-                                                             _planner_common_param.theta_size);
+                const IndexXYT index_correction =
+                    pose2index(temp_correction, _cost_map.info.resolution, _planner_common_param.theta_size);
 
                 if (isOutOfRange(index_correction))
                 {
@@ -1038,19 +1031,14 @@ void HybridAstar::smoothPath(TrajectoryWaypoints &initial_traj)
             }
 
             /*----------平滑项----------*/
-            correction = correction - smoothnessTerm(wp_before_2,
-                                                     wp_before_1,
-                                                     wp_current,
-                                                     wp_after_1,
-                                                     wp_after_2);
+            correction = correction - smoothnessTerm(wp_before_2, wp_before_1, wp_current, wp_after_1, wp_after_2);
 
-            //边界判断
+            // 边界判断
             {
                 temp_correction.position.x = correction.getX();
                 temp_correction.position.y = correction.getY();
-                const IndexXYT index_correction = pose2index(temp_correction,
-                                                             _cost_map.info.resolution,
-                                                             _planner_common_param.theta_size);
+                const IndexXYT index_correction =
+                    pose2index(temp_correction, _cost_map.info.resolution, _planner_common_param.theta_size);
                 if (isOutOfRange(index_correction))
                 {
                     continue;
@@ -1058,16 +1046,13 @@ void HybridAstar::smoothPath(TrajectoryWaypoints &initial_traj)
             }
 
             /*----------曲率限制项----------*/
-            correction = correction - curvatureTerm(wp_before_1,
-                                                    wp_current,
-                                                    wp_after_1);
-            //边界判断
+            correction = correction - curvatureTerm(wp_before_1, wp_current, wp_after_1);
+            // 边界判断
             {
                 temp_correction.position.x = correction.getX();
                 temp_correction.position.y = correction.getY();
-                const IndexXYT index_correction = pose2index(temp_correction,
-                                                             _cost_map.info.resolution,
-                                                             _planner_common_param.theta_size);
+                const IndexXYT index_correction =
+                    pose2index(temp_correction, _cost_map.info.resolution, _planner_common_param.theta_size);
                 if (isOutOfRange(index_correction))
                 {
                     continue;
@@ -1108,16 +1093,16 @@ Vector2D HybridAstar::obstacleTerm(Vector2D xi)
     // if the node is within the map
     if (x < _cost_map.info.width && x >= 0 && y < _cost_map.info.height && y >= 0)
     {
-        //从当前点xi到最近障碍点的向量
+        // 从当前点xi到最近障碍点的向量
         Vector2D obsVct(xi.getX() - _dynamic_voronoi.data[(int)xi.getX()][(int)xi.getY()].obstX,
                         xi.getY() - _dynamic_voronoi.data[(int)xi.getX()][(int)xi.getY()].obstY);
 
         // the closest obstacle is closer than desired correct the path for that
         if (obsDst < _planner_common_param.obstacle_distance_max)
         {
-            //参考：
-            // Dolgov D, Thrun S, Montemerlo M, et al. Practical search techniques in path planning for
-            //  autonomous driving[J]. Ann Arbor, 2008, 1001(48105): 18-80.
+            // 参考：
+            //  Dolgov D, Thrun S, Montemerlo M, et al. Practical search techniques in path planning for
+            //   autonomous driving[J]. Ann Arbor, 2008, 1001(48105): 18-80.
             return gradient = wObstacle * 2 * (obsDst - _planner_common_param.obstacle_distance_max) * obsVct / obsDst;
         }
     }
@@ -1154,15 +1139,15 @@ Vector2D HybridAstar::curvatureTerm(Vector2D xim1, Vector2D xi, Vector2D xip1)
         }
         else
         {
-            //代入原文公式(2)与(3)之间的公式
-            //参考：
-            // Dolgov D, Thrun S, Montemerlo M, et al. Practical search techniques in path planning for
-            //  autonomous driving[J]. Ann Arbor, 2008, 1001(48105): 18-80.
+            // 代入原文公式(2)与(3)之间的公式
+            // 参考：
+            //  Dolgov D, Thrun S, Montemerlo M, et al. Practical search techniques in path planning for
+            //   autonomous driving[J]. Ann Arbor, 2008, 1001(48105): 18-80.
             float absDxi1Inv = 1 / absDxi;
             float PDphi_PcosDphi = -1 / std::sqrt(1 - std::pow(std::cos(Dphi), 2));
             float u = -absDxi1Inv * PDphi_PcosDphi;
             // calculate the p1 and p2 terms
-            p1 = xi.ort(-xip1) / (absDxi * absDxip1); //公式(4)
+            p1 = xi.ort(-xip1) / (absDxi * absDxip1);  // 公式(4)
             p2 = -xip1.ort(xi) / (absDxi * absDxip1);
             // calculate the last terms
             float s = Dphi / (absDxi * absDxi);
@@ -1201,12 +1186,10 @@ Vector2D HybridAstar::smoothnessTerm(Vector2D xim2, Vector2D xim1, Vector2D xi, 
     return wSmoothness * (xim2 - 4 * xim1 + 6 * xi - 4 * xip1 + xip2);
 }
 
-AstarNodePtr HybridAstar::tryAnalyticExpansion(AstarNodePtr current_node,
-                                               AstarNodePtr goal_node,
-                                               int &analytic_iterations /* 0 */,
-                                               float &closest_distance)
+AstarNodePtr HybridAstar::tryAnalyticExpansion(AstarNodePtr current_node, AstarNodePtr goal_node,
+                                               int &analytic_iterations /* 0 */, float &closest_distance)
 {
-    //获取当前点到终点的距离，来判断是否需要更频繁的解析扩张
+    // 获取当前点到终点的距离，来判断是否需要更频繁的解析扩张
     ompl::base::ReedsSheppStateSpace rs_state(_planner_common_param.min_turning_radius);
     State *rs_start = (State *)rs_state.allocState();
     State *rs_end = (State *)rs_state.allocState();
@@ -1218,9 +1201,10 @@ AstarNodePtr HybridAstar::tryAnalyticExpansion(AstarNodePtr current_node,
     float rs_distance = rs_state.distance(rs_start, rs_end);
     closest_distance = std::min(closest_distance, rs_distance);
 
-    //距离越近搜索频率越大
-    int desired_iterations = std::max(static_cast<int>(closest_distance / _planner_common_param.analytic_expansion_ratio),
-                                      static_cast<int>(std::ceil(_planner_common_param.analytic_expansion_ratio)));
+    // 距离越近搜索频率越大
+    int desired_iterations =
+        std::max(static_cast<int>(closest_distance / _planner_common_param.analytic_expansion_ratio),
+                 static_cast<int>(std::ceil(_planner_common_param.analytic_expansion_ratio)));
 
     analytic_iterations = std::min(analytic_iterations, desired_iterations);
 
@@ -1238,15 +1222,16 @@ AstarNodePtr HybridAstar::tryAnalyticExpansion(AstarNodePtr current_node,
             return nullptr;
         }
 
-        //根号2倍的地图分辨率，保证每一次都会到一个新的格子
+        // 根号2倍的地图分辨率，保证每一次都会到一个新的格子
         const float min_step = std::sqrt(_cost_map.info.resolution);
         const unsigned int num_intervals = std::ceil(rs_distance / min_step);
 
-        //生成除了终点的曲线中间点
+        // 生成除了终点的曲线中间点
         std::vector<AstarNodePtr> analytic_candidate_nodes;
         std::vector<double> reals;
 
-        static ompl::base::StateSpacePtr state = std::make_shared<ompl::base::ReedsSheppStateSpace>(_planner_common_param.min_turning_radius);
+        static ompl::base::StateSpacePtr state =
+            std::make_shared<ompl::base::ReedsSheppStateSpace>(_planner_common_param.min_turning_radius);
         ompl::base::ScopedState<> from(state), to(state), s(state);
         from[0] = current_node->x;
         from[1] = current_node->y;
@@ -1258,29 +1243,28 @@ AstarNodePtr HybridAstar::tryAnalyticExpansion(AstarNodePtr current_node,
         int vis_collision_coount = 0;
         bool is_back;
 
-        //除了起点的插值
+        // 除了起点的插值
         rs_state.clearStaticIndexPrev();
         for (unsigned int i = 1; i <= num_intervals; i++)
         {
-            //开始插值
+            // 开始插值
             rs_state.interpolateByXt(from(), to(), (double)i / num_intervals, s(), is_back);
             reals = s.reals();
 
-            //检测该点是否有碰撞
+            // 检测该点是否有碰撞
             geometry_msgs::Pose pose_2_collision;
             pose_2_collision.position.x = reals[0];
             pose_2_collision.position.y = reals[1];
             pose_2_collision.orientation = getQuaternion(normalizeRadian(reals[2], 0.0));
 
-            IndexXYT index_2_collision = pose2index(pose_2_collision,
-                                                    _cost_map.info.resolution,
-                                                    _planner_common_param.theta_size);
+            IndexXYT index_2_collision =
+                pose2index(pose_2_collision, _cost_map.info.resolution, _planner_common_param.theta_size);
 
-            //如果有碰撞的话，直接返回空指针。因为本次解析扩张已经失败了
+            // 如果有碰撞的话，直接返回空指针。因为本次解析扩张已经失败了
             if (detectCollision(index_2_collision))
             {
-                //发生碰撞的时候，程序并不会结束，但是解析扩张会重来，
-                //所以如果不重置prev_i的话，下次解析扩张开始时prev_i还是之前的值并不一定为0
+                // 发生碰撞的时候，程序并不会结束，但是解析扩张会重来，
+                // 所以如果不重置prev_i的话，下次解析扩张开始时prev_i还是之前的值并不一定为0
                 rs_state.clearStaticIndexPrev();
                 // ROS_INFO("-------collision-------");
                 return nullptr;
@@ -1297,14 +1281,14 @@ AstarNodePtr HybridAstar::tryAnalyticExpansion(AstarNodePtr current_node,
             }
         }
 
-        //建立曲线点的父子关系
+        // 建立曲线点的父子关系
         AstarNodePtr prev = current_node;
         for (auto node : analytic_candidate_nodes)
         {
             // ROS_INFO("node back status is: %d", node->is_back);
             node->parent = prev;
 
-            //可视化路径
+            // 可视化路径
             geometry_msgs::PoseStamped vis_pose;
             vis_pose.header.frame_id = _cost_map.header.frame_id;
             vis_pose.header.stamp = ros::Time::now();
@@ -1320,7 +1304,7 @@ AstarNodePtr HybridAstar::tryAnalyticExpansion(AstarNodePtr current_node,
         return prev;
     }
 
-    //一直减减，直到下一次等于0的时候，再次进入if，就相当于1/analytic_iterations的频率了
+    // 一直减减，直到下一次等于0的时候，再次进入if，就相当于1/analytic_iterations的频率了
     analytic_iterations--;
 
     return nullptr;
